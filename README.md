@@ -9,7 +9,7 @@ The target architecture uses **AWS as the primary application platform, Confluen
 The project is being developed incrementally, with implementation and testing evidence documented for each milestone.
 
 ## System Architecture
-
+![RideFlow Multi-Cloud Architecture](docs/architecture.png)
 
 
 **Architecture:** AWS + Confluent Cloud + Azure
