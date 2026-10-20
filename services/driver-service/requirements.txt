@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+email-validator
+prometheus-client
