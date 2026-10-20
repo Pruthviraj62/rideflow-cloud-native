@@ -1,0 +1,39 @@
+name: RideFlow CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements-dev.txt
+            services/pricing-service/requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r services/pricing-service/requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run pricing tests
+        run: pytest -v tests/test_pricing.py
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Build all service images
+        run: docker compose build
