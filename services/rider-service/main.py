@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./rideflow_riders.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/rideflow_riders.db")
 
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace(

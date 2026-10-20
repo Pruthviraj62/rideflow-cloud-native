@@ -9,7 +9,7 @@ from sqlalchemy import Boolean, DateTime, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./rideflow_drivers.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/rideflow_drivers.db")
 
 engine = create_engine(
     DATABASE_URL,

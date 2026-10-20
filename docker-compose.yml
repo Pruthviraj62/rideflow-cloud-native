@@ -1,0 +1,134 @@
+services:
+  rider-service:
+    build:
+      context: ./services/rider-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8001"
+      DATABASE_URL: sqlite:////app/data/rideflow_riders.db
+    expose:
+      - "8001"
+    volumes:
+      - rider-data:/app/data
+    networks:
+      - rideflow-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  driver-service:
+    build:
+      context: ./services/driver-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8002"
+      DATABASE_URL: sqlite:////app/data/rideflow_drivers.db
+    expose:
+      - "8002"
+    volumes:
+      - driver-data:/app/data
+    networks:
+      - rideflow-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  pricing-service:
+    build:
+      context: ./services/pricing-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8003"
+      BASE_FARE: "30"
+      RATE_PER_KM: "12"
+      MIN_FARE: "50"
+    expose:
+      - "8003"
+    networks:
+      - rideflow-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  trip-service:
+    build:
+      context: ./services/trip-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8004"
+      DATABASE_URL: sqlite:////app/data/rideflow_trips.db
+      RIDER_SERVICE_URL: http://rider-service:8001
+      DRIVER_SERVICE_URL: http://driver-service:8002
+      PRICING_SERVICE_URL: http://pricing-service:8003
+    expose:
+      - "8004"
+    volumes:
+      - trip-data:/app/data
+    networks:
+      - rideflow-net
+    depends_on:
+      rider-service:
+        condition: service_healthy
+      driver-service:
+        condition: service_healthy
+      pricing-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8010"
+      RIDER_SERVICE_URL: http://rider-service:8001
+      DRIVER_SERVICE_URL: http://driver-service:8002
+      PRICING_SERVICE_URL: http://pricing-service:8003
+      TRIP_SERVICE_URL: http://trip-service:8004
+    ports:
+      - "127.0.0.1:8010:8010"
+    networks:
+      - rideflow-net
+    depends_on:
+      rider-service:
+        condition: service_healthy
+      driver-service:
+        condition: service_healthy
+      pricing-service:
+        condition: service_healthy
+      trip-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  rideflow-net:
+    driver: bridge
+
+volumes:
+  rider-data:
+  driver-data:
+  trip-data:
