@@ -1,0 +1,2 @@
+confluent-kafka==2.16.1
+azure-storage-file-datalake>=12.18,<13
