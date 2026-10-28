@@ -32,6 +32,52 @@ jobs:
       - name: Run pricing tests
         run: pytest -v tests/test_pricing.py
 
+      - name: Install YAML validator
+        run: python -m pip install PyYAML
+
+      - name: Validate Kubernetes manifests
+        run: |
+          python - <<'PYVALIDATE'
+          from pathlib import Path
+          import yaml
+
+          paths = [
+              Path("k8s/apps/rideflow-apps.yaml"),
+              Path("k8s/kafka/rideflow-kafka.yaml"),
+          ]
+          seen = set()
+
+          for path in paths:
+              with path.open() as stream:
+                  documents = [d for d in yaml.safe_load_all(stream) if d]
+
+              if not documents:
+                  raise SystemExit(f"FAIL: {path} contains no Kubernetes resources")
+
+              for doc in documents:
+                  if not isinstance(doc, dict):
+                      raise SystemExit(f"FAIL: invalid document in {path}")
+                  for field in ("apiVersion", "kind", "metadata"):
+                      if field not in doc:
+                          raise SystemExit(f"FAIL: {path} missing {field}")
+                  name = doc["metadata"].get("name")
+                  if not name:
+                      raise SystemExit(f"FAIL: {path} has a resource without metadata.name")
+                  identity = (
+                      doc["apiVersion"],
+                      doc["kind"],
+                      doc["metadata"].get("namespace", "default"),
+                      name,
+                  )
+                  if identity in seen:
+                      raise SystemExit(f"FAIL: duplicate resource {identity}")
+                  seen.add(identity)
+
+              print(f"PASS: {path} ({len(documents)} resources parsed)")
+
+          print(f"PASS: {len(seen)} unique Kubernetes resources validated")
+          PYVALIDATE
+
       - name: Validate Compose configuration
         run: docker compose config --quiet
 

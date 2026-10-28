@@ -33,3 +33,20 @@ override.tf.json
 *.pem
 *.key
 secrets/
+tfplan
+
+# Local Terraform variable values and saved plans
+*.tfvars
+*.tfvars.json
+*.tfplan
+*.plan
+
+# Local backups and editor-generated copies
+*.bak
+*.before-db-fix
+*.pre-rds.bak
+
+# Python test artifacts
+.pytest_cache/
+.coverage
+htmlcov/

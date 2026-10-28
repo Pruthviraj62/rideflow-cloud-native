@@ -3,3 +3,4 @@ uvicorn[standard]
 sqlalchemy
 email-validator
 prometheus-client
+psycopg[binary]>=3.2,<4.0

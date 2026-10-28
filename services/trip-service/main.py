@@ -5,6 +5,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 
 import httpx
+import json
+import logging
+from confluent_kafka import Producer
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -14,6 +17,11 @@ from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 SERVICE_NAME = "trip-service"
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/rideflow_trips.db")
+
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://", "postgresql+psycopg://", 1
+    )
 PRICING_SERVICE_URL = os.getenv(
     "PRICING_SERVICE_URL",
     "http://127.0.0.1:8003"
@@ -68,6 +76,75 @@ app = FastAPI(
 
 TRIP_REQUESTS = Counter("rideflow_trip_requests_total", "Total trip creation requests")
 TRIP_ERRORS = Counter("rideflow_trip_errors_total", "Total trip creation errors")
+
+
+logger = logging.getLogger(SERVICE_NAME)
+_kafka_producer = None
+
+
+def get_kafka_producer():
+    global _kafka_producer
+    if _kafka_producer is not None:
+        return _kafka_producer
+
+    bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+    if not bootstrap:
+        return None
+
+    config = {
+        "bootstrap.servers": bootstrap,
+        "client.id": SERVICE_NAME,
+    }
+
+    api_key = os.getenv("KAFKA_API_KEY")
+    api_secret = os.getenv("KAFKA_API_SECRET")
+    if api_key and api_secret:
+        config.update({
+            "security.protocol": "SASL_SSL",
+            "sasl.mechanisms": "PLAIN",
+            "sasl.username": api_key,
+            "sasl.password": api_secret,
+        })
+
+    _kafka_producer = Producer(config)
+    return _kafka_producer
+
+
+def publish_trip_event(event_type: str, trip: "TripResponse") -> None:
+    producer = get_kafka_producer()
+    if producer is None:
+        logger.warning("Kafka not configured; skipped event %s", event_type)
+        return
+
+    topic = os.getenv("KAFKA_TOPIC", "trips")
+    event = {
+        "event_id": str(uuid.uuid4()),
+        "event_type": event_type,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "trip": trip.model_dump(mode="json"),
+    }
+
+    def delivery_report(err, message):
+        if err is not None:
+            logger.error("Kafka delivery failed for %s: %s", event_type, err)
+        else:
+            logger.info(
+                "Kafka delivered: type=%s topic=%s partition=%s offset=%s",
+                event_type, message.topic(), message.partition(), message.offset()
+            )
+
+    try:
+        producer.produce(
+            topic,
+            key=trip.id,
+            value=json.dumps(event),
+            callback=delivery_report,
+        )
+        producer.poll(0)
+        if producer.flush(5):
+            logger.error("Kafka delivery timed out for event %s", event_type)
+    except Exception:
+        logger.exception("Unable to publish Kafka event %s", event_type)
 
 
 class TripCreate(BaseModel):
@@ -185,7 +262,9 @@ def create_trip(request: TripCreate):
         db.add(trip)
         db.commit()
         db.refresh(trip)
-        return to_response(trip)
+        result = to_response(trip)
+        publish_trip_event("TRIP_CREATED", result)
+        return result
 
 
 @app.get("/trips", response_model=list[TripResponse])
@@ -229,7 +308,9 @@ def assign_driver(trip_id: str, request: TripAssign):
         trip.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(trip)
-        return to_response(trip)
+        result = to_response(trip)
+        publish_trip_event("TRIP_ASSIGNED", result)
+        return result
 
 
 @app.patch("/trips/{trip_id}/status", response_model=TripResponse)
@@ -254,4 +335,6 @@ def update_trip_status(trip_id: str, request: TripStatusUpdate):
         trip.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(trip)
-        return to_response(trip)
+        result = to_response(trip)
+        publish_trip_event("TRIP_STATUS_CHANGED", result)
+        return result
