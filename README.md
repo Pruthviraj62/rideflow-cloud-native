@@ -365,3 +365,32 @@ The architecture is a target design until individual components have been implem
 
 See [docs/architecture.md](docs/architecture.md) for the architecture overview.
 
+
+## Terraform Setup and State Dependencies
+
+The AWS infrastructure is organized into separate Terraform modules:
+
+1. `terraform/aws/networking` — creates the VPC, subnets, gateways, and routing.
+2. `terraform/ecr` — manages container repositories and lifecycle policies.
+3. `terraform/aws/eks` — provisions the Kubernetes cluster and worker nodes.
+4. `terraform/aws/rds` — provisions PostgreSQL infrastructure.
+
+### State dependency
+
+The EKS and RDS configurations read networking outputs from the local state file at
+`terraform/aws/networking/terraform.tfstate`, using relative paths from their module
+directories. Initialize and provision networking first, and ensure its state is available
+before planning or validating dependent modules.
+
+Terraform state files, variable files containing environment-specific values, and saved
+plans must not be committed to Git. Configure required variables locally before running
+Terraform commands.
+
+### Validation versus provisioning
+
+`terraform fmt -check` verifies formatting, and `terraform validate` checks configuration
+consistency. Neither proves that infrastructure has been provisioned successfully in AWS.
+Use a reviewed plan and verify the resulting AWS resources before reporting provisioning
+as complete.
+
+Do not change an existing state backend without planning and verifying the state migration.
