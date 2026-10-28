@@ -1,0 +1,364 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rideflow
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rider-service
+  namespace: rideflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rider-service
+  template:
+    metadata:
+      labels:
+        app: rider-service
+    spec:
+      containers:
+        - name: rider-service
+          image: 893471991585.dkr.ecr.ap-south-1.amazonaws.com/rideflow-rider-service:v0.1.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8001
+          env:
+            - name: PORT
+              value: "8001"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rideflow-db
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rider-service
+  namespace: rideflow
+spec:
+  type: ClusterIP
+  selector:
+    app: rider-service
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: driver-service
+  namespace: rideflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: driver-service
+  template:
+    metadata:
+      labels:
+        app: driver-service
+    spec:
+      containers:
+        - name: driver-service
+          image: 893471991585.dkr.ecr.ap-south-1.amazonaws.com/rideflow-driver-service:v0.1.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8002
+          env:
+            - name: PORT
+              value: "8002"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rideflow-db
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: driver-service
+  namespace: rideflow
+spec:
+  type: ClusterIP
+  selector:
+    app: driver-service
+  ports:
+    - name: http
+      port: 8002
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pricing-service
+  namespace: rideflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pricing-service
+  template:
+    metadata:
+      labels:
+        app: pricing-service
+    spec:
+      containers:
+        - name: pricing-service
+          image: 893471991585.dkr.ecr.ap-south-1.amazonaws.com/rideflow-pricing-service:v0.1.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8003
+          env:
+            - name: PORT
+              value: "8003"
+            - name: BASE_FARE
+              value: "30"
+            - name: RATE_PER_KM
+              value: "12"
+            - name: MIN_FARE
+              value: "50"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pricing-service
+  namespace: rideflow
+spec:
+  type: ClusterIP
+  selector:
+    app: pricing-service
+  ports:
+    - name: http
+      port: 8003
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trip-service
+  namespace: rideflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trip-service
+  template:
+    metadata:
+      labels:
+        app: trip-service
+    spec:
+      containers:
+        - name: trip-service
+          image: 893471991585.dkr.ecr.ap-south-1.amazonaws.com/rideflow-trip-service:v0.1.3
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8004
+          env:
+            - name: PORT
+              value: "8004"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rideflow-db
+                  key: DATABASE_URL
+            - name: RIDER_SERVICE_URL
+              value: "http://rider-service:8001"
+            - name: DRIVER_SERVICE_URL
+              value: "http://driver-service:8002"
+            - name: PRICING_SERVICE_URL
+              value: "http://pricing-service:8003"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trip-service
+  namespace: rideflow
+spec:
+  type: ClusterIP
+  selector:
+    app: trip-service
+  ports:
+    - name: http
+      port: 8004
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: rideflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: 893471991585.dkr.ecr.ap-south-1.amazonaws.com/rideflow-api-gateway:v0.1.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8010
+          env:
+            - name: PORT
+              value: "8010"
+            - name: RIDER_SERVICE_URL
+              value: "http://rider-service:8001"
+            - name: DRIVER_SERVICE_URL
+              value: "http://driver-service:8002"
+            - name: PRICING_SERVICE_URL
+              value: "http://pricing-service:8003"
+            - name: TRIP_SERVICE_URL
+              value: "http://trip-service:8004"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: rideflow
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 8010
+      targetPort: http
